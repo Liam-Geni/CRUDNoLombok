@@ -1,5 +1,7 @@
 package com.sparta.boardprac.jwt;
 
+import com.sparta.boardprac.domain.RefreshToken;
+import com.sparta.boardprac.repository.RefreshTokenRepository;
 import com.sparta.boardprac.utils.user.UserDetailsServiceImpl;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -16,15 +18,20 @@ import javax.servlet.http.HttpServletRequest;
 import java.security.Key;
 import java.util.Base64;
 import java.util.Date;
+import java.util.Optional;
 
 @Slf4j
 @Component
 public class JwtUtil {
 
     private final UserDetailsServiceImpl userDetailsService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
-    public JwtUtil(UserDetailsServiceImpl userDetailsService){
+    public JwtUtil(UserDetailsServiceImpl userDetailsService,
+                   RefreshTokenRepository refreshTokenRepository
+    ){
         this.userDetailsService = userDetailsService;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     private static final long ACCESS_TIME = 2 * 60 * 60 * 1000L;
@@ -65,6 +72,31 @@ public class JwtUtil {
                 .signWith(key, signatureAlgorithm)
                 .compact();
     }
+
+
+    // 토큰 검증
+    public Boolean tokenValidation(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+            return true;
+        } catch (Exception ex) {
+            log.error(ex.getMessage());
+            return false;
+        }
+    }
+
+    // refreshToken 토큰 검증
+    public Boolean refreshTokenValidation(String token) {
+
+        // 1차 토큰 검증
+        if(!tokenValidation(token)) return false;
+
+        // DB에 저장한 토큰 비교
+        Optional<RefreshToken> refreshToken = refreshTokenRepository.findByMemberUsername(getUsernameFromToken(token));
+
+        return refreshToken.isPresent() && token.equals(refreshToken.get().getRefreshToken());
+    }
+
 
     //인증 객체 생성
     public Authentication createAuthentication(String username){
